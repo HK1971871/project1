@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Register</title>
+  </head>
+  <body>
+    <h2>Đăng ký</h2>
+    <form method="POST">
+      Username:
+      <input type="text" name="username" required />
+      <br />
+      Password:
+      <input type="password" name="password" required />
+      <br />
+      <button type="submit">Register</button>
+    </form>
+    <a href="{{ url_for('login') }}">Đã có tài khoản? Login</a>
+  </body>
+</html>
