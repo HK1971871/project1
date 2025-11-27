@@ -5,7 +5,7 @@ app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
 # Kết nối PostgreSQL
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://huukhoiapp_wi1b_user:74G3BhRBsAUAJ1rilUW4geb9n7n208QF@dpg-d4k1lvili9vc73df8l1g-a/huukhoiapp_wi1b'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://huukhoiapp_wi1b_user:74G3BhRBsAUAJ1rilUW4geb9n7n208QF@dpg-d4k1lvili9vc73df8l1g-a.internal:5432/huukhoiapp_wi1b'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
