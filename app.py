@@ -1,61 +1,66 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-
+import pymysql
+pymysql.install_as_MySQLdb()
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # đổi thành key riêng của bạn
+# Kết nối PostgreSQL (ví dụ)
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://username:password@localhost:5432/mydb'
+# Nếu dùng MySQL: 'mysql://username:password@localhost/mydb'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:LHK123456@localhost/huukhoiapp'
 
-# Giả lập database bằng dictionary
-users = {}
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-@app.route("/")
+# Định nghĩa bảng Users
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+
+    def __repr__(self):
+        return f"<User {self.name}>"
+
+# Trang chủ: hiển thị danh sách user
+@app.route('/')
 def index():
-    return render_template("index.html")
+    users = User.query.all()
+    return render_template('index.html', users=users)
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+# Thêm user
+@app.route('/add', methods=['GET', 'POST'])
+def add():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        new_user = User(name=name, email=email)
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('index'))
+    return render_template('add.html')
 
-        if username in users:
-            flash("User đã tồn tại!")
-            return redirect(url_for("register"))
+# Sửa user
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
+    user = User.query.get_or_404(id)
+    if request.method == 'POST':
+        user.name = request.form['name']
+        user.email = request.form['email']
+        db.session.commit()
+        return redirect(url_for('index'))
+    return render_template('edit.html', user=user)
 
-        users[username] = generate_password_hash(password)
-        flash("Đăng ký thành công, mời login.")
-        return redirect(url_for("login"))
+# Xóa user
+@app.route('/delete/<int:id>')
+def delete(id):
+    user = User.query.get_or_404(id)
+    db.session.delete(user)
+    db.session.commit()
+    return redirect(url_for('index'))
 
-    return render_template("register.html")
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-
-        if username in users and check_password_hash(users[username], password):
-            session["user"] = username
-            flash("Login thành công!")
-            return redirect(url_for("dashboard"))
-        else:
-            flash("Sai username hoặc password.")
-            return redirect(url_for("login"))
-
-    return render_template("login.html")
-
-@app.route("/dashboard")
-def dashboard():
-    if "user" in session:
-        return render_template("dashboard.html", user=session["user"])
-    else:
-        flash("Bạn cần login trước.")
-        return redirect(url_for("login"))
-
-@app.route("/logout")
-def logout():
-    session.pop("user", None)
-    flash("Đã logout.")
-    return redirect(url_for("index"))
-
-if __name__ == "__main__":
+if __name__ == '__main__':
+    # Tạo bảng nếu chưa có
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
