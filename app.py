@@ -1,8 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-import pymysql
-pymysql.install_as_MySQLdb()
+
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # đổi thành key riêng của bạn
 # Kết nối PostgreSQL (ví dụ)
