@@ -8,7 +8,7 @@ app.secret_key = "supersecretkey"  # đổi thành key riêng của bạn
 # Kết nối PostgreSQL (ví dụ)
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://username:password@localhost:5432/mydb'
 # Nếu dùng MySQL: 'mysql://username:password@localhost/mydb'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://huukhoiapp_user:752J2FDyzVF7DxTWs4q42jam142eH7oC@dpg-d4k0u2vdiees73b76bvg-a/huukhoiapp'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://huukhoiapp_wi1b_user:74G3BhRBsAUAJ1rilUW4geb9n7n208QF@dpg-d4k1lvili9vc73df8l1g-a/huukhoiapp_wi1b'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
