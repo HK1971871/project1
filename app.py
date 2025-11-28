@@ -1,61 +1,101 @@
-from flask import Flask, render_template, request, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
+import os
+import time
+import smtplib
+from email.mime.text import MIMEText
+from flask import Flask, request, jsonify
+from celery import Celery
+from celery.result import AsyncResult
 
+# -----------------------------------------------------------------------------
+# Flask app
+# -----------------------------------------------------------------------------
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
 
-# Kết nối PostgreSQL
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://huukhoiapp_wi1b_user:74G3BhRBsAUAJ1rilUW4geb9n7n208QF@dpg-d4k1lvili9vc73df8l1g-a.internal:5432/huukhoiapp_wi1b'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# -----------------------------------------------------------------------------
+# Config: lấy từ biến môi trường
+# -----------------------------------------------------------------------------
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 
-db = SQLAlchemy(app)
+celery = Celery(
+    app.import_name,
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND,
+)
+celery.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    timezone="UTC",
+    enable_utc=True,
+)
 
-# Định nghĩa bảng Users
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False)
-    email = db.Column(db.String(100), unique=True, nullable=False)
+# -----------------------------------------------------------------------------
+# Tasks
+# -----------------------------------------------------------------------------
+@celery.task(name="tasks.heavy_job")
+def heavy_job(seconds: int = 5):
+    """Giả lập tác vụ nặng bằng cách ngủ 'seconds' giây."""
+    time.sleep(max(1, seconds))
+    return {"status": "done", "slept": seconds}
 
-    def __repr__(self):
-        return f"<User {self.name}>"
+@celery.task(name="tasks.send_email_smtp")
+def send_email_smtp(to: str, subject: str, body: str):
+    """Gửi email thật qua SMTP (ví dụ Gmail)."""
+    sender = os.getenv("SMTP_USER")
+    password = os.getenv("SMTP_PASS")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "465"))
 
-# Tạo bảng khi app khởi động
-with app.app_context():
-    db.create_all()
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to
 
+    try:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+            server.login(sender, password)
+            server.sendmail(sender, [to], msg.as_string())
+        return {"status": "sent", "to": to}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# -----------------------------------------------------------------------------
 # Routes
-@app.route('/')
-def index():
-    users = User.query.all()
-    return render_template('index.html', users=users)
+# -----------------------------------------------------------------------------
+@app.route("/", methods=["GET"])
+def health():
+    return jsonify({"ok": True, "service": "flask+celery+redis"}), 200
 
-@app.route('/add', methods=['GET', 'POST'])
-def add():
-    if request.method == 'POST':
-        name = request.form['name']
-        email = request.form['email']
-        new_user = User(name=name, email=email)
-        db.session.add(new_user)
-        db.session.commit()
-        return redirect(url_for('index'))
-    return render_template('add.html')
+@app.route("/run-heavy", methods=["POST"])
+def run_heavy():
+    data = request.get_json(silent=True) or {}
+    seconds = int(data.get("seconds", 5))
+    task = heavy_job.delay(seconds)
+    return jsonify({"message": "Task accepted", "task_id": task.id}), 202
 
-@app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit(id):
-    user = User.query.get_or_404(id)
-    if request.method == 'POST':
-        user.name = request.form['name']
-        user.email = request.form['email']
-        db.session.commit()
-        return redirect(url_for('index'))
-    return render_template('edit.html', user=user)
+@app.route("/send-email-smtp", methods=["POST"])
+def send_email_smtp_route():
+    data = request.get_json(silent=True) or {}
+    to = data.get("to")
+    subject = data.get("subject", "(No subject)")
+    body = data.get("body", "")
+    if not to:
+        return jsonify({"error": "Missing 'to'"}), 400
+    task = send_email_smtp.delay(to, subject, body)
+    return jsonify({"message": "Email queued (SMTP)", "task_id": task.id}), 202
 
-@app.route('/delete/<int:id>')
-def delete(id):
-    user = User.query.get_or_404(id)
-    db.session.delete(user)
-    db.session.commit()
-    return redirect(url_for('index'))
+@app.route("/task-status/<task_id>", methods=["GET"])
+def task_status(task_id):
+    res: AsyncResult = celery.AsyncResult(task_id)
+    response = {
+        "task_id": task_id,
+        "state": res.state,
+        "ready": res.ready(),
+    }
+    if res.ready():
+        response["result"] = res.result
+    return jsonify(response), 200
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)

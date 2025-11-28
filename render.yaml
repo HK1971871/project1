@@ -1,0 +1,62 @@
+services:
+  # Redis service
+  - type: redis
+    name: project1-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+
+  # Web service: Flask + Gunicorn
+  - type: web
+    name: project1-web
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers=2 --threads=4 --bind 0.0.0.0:$PORT
+    autoDeploy: true
+    envVars:
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: project1-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: project1-redis
+          type: redis
+          property: connectionString
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        value: your_email@gmail.com
+      - key: SMTP_PASS
+        value: your_app_password
+
+  # Background worker: Celery Worker
+  - type: worker
+    name: project1-worker
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.celery worker --loglevel=info --concurrency=2
+    autoDeploy: true
+    envVars:
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: project1-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: project1-redis
+          type: redis
+          property: connectionString
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        value: your_email@gmail.com
+      - key: SMTP_PASS
+        value: your_app_password
